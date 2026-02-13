@@ -118,7 +118,6 @@ export default function Sidebar() {
       </nav>
       {profile?.role === 'cashier' && (
          <button
-           onClick={() => setShowShiftModal(true)}
            className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg"
     >
            <DollarSign className="w-5 h-5" />
