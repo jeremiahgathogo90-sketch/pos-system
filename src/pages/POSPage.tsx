@@ -53,7 +53,7 @@ export default function POSPage() {
     email: '',
   })
 
-  const [taxRate] = useState(16)
+  const [taxRate] = useState(0) // You can make this dynamic by fetching from store settings if needed
 
   // Check for open shift on mount — use session directly so we don't
   // depend on React context hydration timing
