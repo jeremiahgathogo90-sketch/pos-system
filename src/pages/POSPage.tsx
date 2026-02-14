@@ -53,7 +53,7 @@ export default function POSPage() {
     email: '',
   })
 
-  const [taxRate] = useState(0) // You can make this dynamic by fetching from store settings if needed
+  const [taxRate] = useState(16)
 
   // Check for open shift on mount — use session directly so we don't
   // depend on React context hydration timing
@@ -361,27 +361,66 @@ export default function POSPage() {
 
       if (itemsError) throw itemsError
 
-      // Auto-deduct stock
+      // Auto-deduct stock - Bulletproof with multiple fallbacks
+      console.log('🔄 Starting stock deduction for', cart.length, 'items')
+      
       for (const item of cart) {
-        const { error: stockError } = await supabase.rpc('decrement_stock', {
+        console.log(`📦 Updating stock for ${item.product_name}: -${item.quantity}`)
+        
+        // Method 1: Try RPC function (fastest, atomic)
+        const { error: rpcError } = await supabase.rpc('decrement_stock', {
           product_id: item.product_id,
           quantity_to_subtract: item.quantity,
         })
 
-        // Fallback if RPC doesn't exist
-        if (stockError) {
-          const { data: product } = await supabase
+        if (rpcError) {
+          console.warn(`⚠️ RPC failed for ${item.product_name}, using fallback:`, rpcError.message)
+          
+          // Method 2: Direct UPDATE with raw SQL expression
+          const { error: updateError } = await supabase
             .from('products')
-            .select('stock_quantity')
+            .update({ 
+              stock_quantity: supabase.raw(`stock_quantity - ${item.quantity}`)
+            })
             .eq('id', item.product_id)
-            .single()
 
-          await supabase
-            .from('products')
-            .update({ stock_quantity: (product?.stock_quantity || 0) - item.quantity })
-            .eq('id', item.product_id)
+          if (updateError) {
+            console.error(`⚠️ Direct update failed for ${item.product_name}, trying manual:`, updateError.message)
+            
+            // Method 3: Fetch current, calculate, update (slowest but most reliable)
+            const { data: product, error: fetchError } = await supabase
+              .from('products')
+              .select('stock_quantity')
+              .eq('id', item.product_id)
+              .single()
+
+            if (!fetchError && product) {
+              const newStock = Math.max(0, (product.stock_quantity || 0) - item.quantity)
+              
+              const { error: manualError } = await supabase
+                .from('products')
+                .update({ stock_quantity: newStock })
+                .eq('id', item.product_id)
+              
+              if (manualError) {
+                console.error(`❌ All stock update methods failed for ${item.product_name}:`, manualError.message)
+                toast.error(`Warning: Stock for ${item.product_name} may not have updated!`)
+              } else {
+                console.log(`✅ Stock updated (manual) for ${item.product_name}: ${product.stock_quantity} → ${newStock}`)
+              }
+            } else {
+              console.error(`❌ Could not fetch product ${item.product_name}:`, fetchError?.message)
+              toast.error(`Error updating stock for ${item.product_name}`)
+            }
+          } else {
+            console.log(`✅ Stock updated (direct SQL) for ${item.product_name}`)
+          }
+        } else {
+          console.log(`✅ Stock updated (RPC) for ${item.product_name}`)
         }
       }
+      
+      console.log('✅ Stock deduction complete for all items')
 
       // Update customer balance if credit used
       if (creditAmount > 0 && selectedCustomer) {
@@ -427,6 +466,10 @@ export default function POSPage() {
       queryClient.invalidateQueries({ queryKey: ['products'] })
       queryClient.invalidateQueries({ queryKey: ['current-shift'] })
       queryClient.invalidateQueries({ queryKey: ['customers'] })
+      
+      // Force immediate refetch of products to show updated stock
+      queryClient.refetchQueries({ queryKey: ['products'] })
+      console.log('🔄 Products cache refreshed - stock should update immediately')
     },
     onError: (error: any) => {
       toast.error(error.message || 'Failed to complete sale')
