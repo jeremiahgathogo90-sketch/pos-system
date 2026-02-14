@@ -4,7 +4,7 @@ import { useAuthContext } from '../../contexts/AuthContext'
 import { supabase } from '../../libs/supabase'
 import {
   LayoutDashboard, Package, ShoppingCart, Users, FileText,
-  TrendingUp, Settings, LogOut, ChevronLeft, Menu, X
+  TrendingUp, Settings, LogOut, Menu, X, Warehouse, FileBox, Truck
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -23,15 +23,70 @@ export default function Sidebar() {
     setIsMobileOpen(false)
   }
 
+  // ═══════════════════════════════════════════════════════════
+  // NAVIGATION - Matching your exact page files
+  // ═══════════════════════════════════════════════════════════
   const navItems = [
-    { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', roles: ['owner', 'admin', 'accountant', 'cashier'] },
-    { to: '/pos', icon: ShoppingCart, label: 'POS', roles: ['owner', 'admin', 'cashier'] },
-    { to: '/products', icon: Package, label: 'Products', roles: ['owner', 'admin', 'accountant'] },
-    { to: '/users', icon: Users, label: 'Users', roles: ['owner', 'admin'] },
-    { to: '/customers', icon: Users, label: 'Customers', roles: ['owner', 'admin', 'cashier'] },
-    { to: '/reports', icon: FileText, label: 'Reports', roles: ['owner', 'admin', 'accountant'] },
-    { to: '/my-sales', icon: TrendingUp, label: 'My Sales', roles: ['cashier'] },
-    { to: '/settings', icon: Settings, label: 'Settings', roles: ['owner', 'admin'] },
+    { 
+      to: '/dashboard', 
+      icon: LayoutDashboard, 
+      label: 'Dashboard', 
+      roles: ['owner', 'admin', 'accountant', 'cashier'] 
+    },
+    { 
+      to: '/pos', 
+      icon: ShoppingCart, 
+      label: 'POS', 
+      roles: ['owner', 'admin', 'cashier'] 
+    },
+    { 
+      to: '/inventory', 
+      icon: Warehouse, 
+      label: 'Inventory', 
+      roles: ['owner', 'admin', 'accountant'] 
+    },
+    { 
+      to: '/customers', 
+      icon: Users, 
+      label: 'Customers', 
+      roles: ['owner', 'admin', 'cashier'] 
+    },
+    { 
+      to: '/suppliers', 
+      icon: Truck, 
+      label: 'Suppliers', 
+      roles: ['owner', 'admin'] 
+    },
+    { 
+      to: '/purchase-orders', 
+      icon: FileBox, 
+      label: 'Purchase Orders', 
+      roles: ['owner', 'admin'] 
+    },
+    { 
+      to: '/users', 
+      icon: Users, 
+      label: 'Users', 
+      roles: ['owner', 'admin'] 
+    },
+    { 
+      to: '/reports', 
+      icon: FileText, 
+      label: 'Reports', 
+      roles: ['owner', 'admin', 'accountant'] 
+    },
+    { 
+      to: '/my-sales', 
+      icon: TrendingUp, 
+      label: 'My Sales', 
+      roles: ['cashier'] 
+    },
+    { 
+      to: '/settings', 
+      icon: Settings, 
+      label: 'Settings', 
+      roles: ['owner', 'admin'] 
+    },
   ]
 
   const userRole = profile?.role || 'cashier'
@@ -115,16 +170,15 @@ export default function Sidebar() {
           ))}
         </nav>
 
-        {/* Logout */}
-        <div className="p-4 border-t border-gray-800">
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/* LOGOUT BUTTON - Fixed and Always Visible */}
+        {/* ═══════════════════════════════════════════════════════════ */}
+        <div className="p-4 border-t border-gray-800 flex-shrink-0">
           <button
-            onClick={() => {
-              handleLogout()
-              closeMobileSidebar()
-            }}
+            onClick={handleLogout}
             className="flex items-center gap-3 px-4 py-3 w-full text-gray-300 hover:bg-red-600 hover:text-white rounded-lg transition"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="w-5 h-5 flex-shrink-0" />
             <span className="font-medium">Logout</span>
           </button>
         </div>
