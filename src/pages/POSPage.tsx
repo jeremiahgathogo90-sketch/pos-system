@@ -367,56 +367,50 @@ export default function POSPage() {
       for (const item of cart) {
         console.log(`📦 Updating stock for ${item.product_name}: -${item.quantity}`)
         
-        // Method 1: Try RPC function (fastest, atomic)
-        const { error: rpcError } = await supabase.rpc('decrement_stock', {
-          product_id: item.product_id,
-          quantity_to_subtract: item.quantity,
-        })
+        try {
+          // Method 1: Try RPC function (fastest, atomic)
+          const { error: rpcError } = await supabase.rpc('decrement_stock', {
+            product_id: item.product_id,
+            quantity_to_subtract: item.quantity,
+          })
 
-        if (rpcError) {
-          console.warn(`⚠️ RPC failed for ${item.product_name}, using fallback:`, rpcError.message)
-          
-          // Method 2: Direct UPDATE with raw SQL expression
-          const { error: updateError } = await supabase
-            .from('products')
-            .update({ 
-              stock_quantity: supabase.raw(`stock_quantity - ${item.quantity}`)
-            })
-            .eq('id', item.product_id)
-
-          if (updateError) {
-            console.error(`⚠️ Direct update failed for ${item.product_name}, trying manual:`, updateError.message)
+          if (rpcError) {
+            console.warn(`⚠️ RPC failed for ${item.product_name}, using fallback:`, rpcError.message)
             
-            // Method 3: Fetch current, calculate, update (slowest but most reliable)
+            // Method 2: Fetch current stock, calculate new value, then update
             const { data: product, error: fetchError } = await supabase
               .from('products')
               .select('stock_quantity')
               .eq('id', item.product_id)
               .single()
 
-            if (!fetchError && product) {
-              const newStock = Math.max(0, (product.stock_quantity || 0) - item.quantity)
-              
-              const { error: manualError } = await supabase
-                .from('products')
-                .update({ stock_quantity: newStock })
-                .eq('id', item.product_id)
-              
-              if (manualError) {
-                console.error(`❌ All stock update methods failed for ${item.product_name}:`, manualError.message)
-                toast.error(`Warning: Stock for ${item.product_name} may not have updated!`)
-              } else {
-                console.log(`✅ Stock updated (manual) for ${item.product_name}: ${product.stock_quantity} → ${newStock}`)
-              }
-            } else {
+            if (fetchError || !product) {
               console.error(`❌ Could not fetch product ${item.product_name}:`, fetchError?.message)
-              toast.error(`Error updating stock for ${item.product_name}`)
+              throw new Error(`Failed to fetch product stock`)
             }
+
+            // Calculate new stock (never go below 0)
+            const newStock = Math.max(0, product.stock_quantity - item.quantity)
+            
+            // Update with calculated value
+            const { error: updateError } = await supabase
+              .from('products')
+              .update({ stock_quantity: newStock })
+              .eq('id', item.product_id)
+            
+            if (updateError) {
+              console.error(`❌ Update failed for ${item.product_name}:`, updateError.message)
+              throw new Error(`Failed to update product stock`)
+            }
+            
+            console.log(`✅ Stock updated (fallback) for ${item.product_name}: ${product.stock_quantity} → ${newStock}`)
           } else {
-            console.log(`✅ Stock updated (direct SQL) for ${item.product_name}`)
+            console.log(`✅ Stock updated (RPC) for ${item.product_name}`)
           }
-        } else {
-          console.log(`✅ Stock updated (RPC) for ${item.product_name}`)
+        } catch (error: any) {
+          console.error(`❌ Stock update error for ${item.product_name}:`, error.message)
+          // Don't throw - allow sale to complete even if stock update fails
+          toast.error(`Warning: Stock for ${item.product_name} may not have updated correctly`)
         }
       }
       
@@ -831,18 +825,23 @@ export default function POSPage() {
         isPending={completeSale.isPending}
       />
 
-      {/* Receipt Modal */}
-      {receiptData && (
+      {/* Receipt Modal - Fixed to prevent freeze */}
+      {showReceipt && receiptData && (
         <ReceiptModal
           isOpen={showReceipt}
-          onClose={() => setShowReceipt(false)}
+          onClose={() => {
+            console.log('🔴 Receipt Modal - onClose called')
+            setShowReceipt(false)
+          }}
           onNewSale={() => {
+            console.log('🟢 Receipt Modal - onNewSale called')
             clearCart()
             setDiscount(0)
             setSelectedCustomer(null)
             setReceiptData(null)
             setLastSale(null)
             setShowReceipt(false)
+            console.log('✅ Cart cleared, ready for new sale')
           }}
           saleData={receiptData}
           storeInfo={storeInfo}

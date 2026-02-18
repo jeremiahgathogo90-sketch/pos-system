@@ -1,39 +1,12 @@
-import { useRef, useEffect } from 'react'
-import { X, Printer } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { X, Printer, ShoppingCart } from 'lucide-react'
 
-interface ReceiptItem {
-  product_name: string
-  quantity: number
-  unit_price: number
-  subtotal: number
-}
-
-interface ReceiptProps {
+interface ReceiptModalProps {
   isOpen: boolean
   onClose: () => void
-  onNewSale?: () => void
-  saleData: {
-    sale_number: string
-    cashier_name: string
-    customer_name?: string
-    items: ReceiptItem[]
-    subtotal: number
-    tax_amount: number
-    discount_amount: number
-    total: number
-    cash_amount?: number | null
-    card_amount?: number | null
-    credit_amount?: number | null
-    change_amount?: number | null
-    created_at: string
-  }
-  storeInfo?: {
-    store_name?: string
-    name?: string
-    address?: string
-    phone?: string
-    receipt_footer?: string
-  }
+  onNewSale: () => void
+  saleData: any
+  storeInfo?: any
   autoPrint?: boolean
 }
 
@@ -43,263 +16,356 @@ export default function ReceiptModal({
   onNewSale,
   saleData,
   storeInfo,
-  autoPrint = true,
-}: ReceiptProps) {
-  const componentRef = useRef<HTMLDivElement>(null)
+  autoPrint = false
+}: ReceiptModalProps) {
+  const receiptRef = useRef<HTMLDivElement>(null)
+  const hasAutoPrinted = useRef(false)
 
-  // Auto-print when modal opens
+  // Auto-print ONCE when modal opens
   useEffect(() => {
-    if (isOpen && autoPrint) {
+    if (isOpen && autoPrint && !hasAutoPrinted.current) {
+      hasAutoPrinted.current = true
       const timer = setTimeout(() => {
         handlePrint()
-      }, 600)
+      }, 500)
       return () => clearTimeout(timer)
+    }
+    
+    // Reset when modal closes
+    if (!isOpen) {
+      hasAutoPrinted.current = false
     }
   }, [isOpen])
 
-  // Safe number formatter - handles undefined, null, NaN
-  const fmt = (amount: number | null | undefined): string => {
-    const num = Number(amount ?? 0)
-    if (isNaN(num)) return 'KES 0.00'
-    return `KES ${num.toLocaleString('en-KE', { minimumFractionDigits: 2 })}`
-  }
-
   const handlePrint = () => {
-    const receiptContent = componentRef.current?.innerHTML
-    if (!receiptContent) return
+    try {
+      console.log('🖨️ Printing receipt...')
+      if (!receiptRef.current) {
+        console.error('Receipt ref not found')
+        return
+      }
 
-    const printWindow = window.open('', '_blank', 'width=400,height=600')
-    if (!printWindow) {
-      alert('Please allow popups to print receipts')
-      return
+      const printWindow = window.open('', '_blank', 'width=300,height=600')
+      if (!printWindow) {
+        console.error('Could not open print window')
+        alert('Please allow popups to print receipts')
+        return
+      }
+
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Receipt - ${saleData?.sale_number || 'SALE'}</title>
+            <style>
+              @media print {
+                @page { 
+                  margin: 0;
+                  size: 80mm auto;
+                }
+                body { 
+                  margin: 0;
+                  padding: 0;
+                }
+              }
+              body {
+                font-family: 'Courier New', monospace;
+                width: 80mm;
+                margin: 0 auto;
+                padding: 5mm;
+                font-size: 12px;
+              }
+              .center { text-align: center; }
+              .bold { font-weight: bold; }
+              .large { font-size: 16px; }
+              .divider { 
+                border-top: 1px dashed #000; 
+                margin: 8px 0; 
+              }
+              table { 
+                width: 100%; 
+                border-collapse: collapse; 
+              }
+              td { 
+                padding: 2px 0; 
+              }
+              .right { text-align: right; }
+            </style>
+          </head>
+          <body>
+            ${receiptRef.current.innerHTML}
+          </body>
+        </html>
+      `)
+      
+      printWindow.document.close()
+      
+      // Wait for content to load before printing
+      printWindow.onload = () => {
+        printWindow.focus()
+        setTimeout(() => {
+          printWindow.print()
+          printWindow.close()
+        }, 250)
+      }
+      
+      console.log('✅ Print window opened')
+    } catch (error) {
+      console.error('Print error:', error)
+      alert('Failed to print receipt. Please try again.')
     }
-
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Receipt - ${saleData.sale_number}</title>
-          <style>
-            @media print {
-              @page { size: 80mm auto; margin: 2mm; }
-              body { margin: 0; }
-            }
-            body {
-              font-family: 'Courier New', monospace;
-              width: 76mm;
-              margin: 0 auto;
-              font-size: 12px;
-            }
-            table { width: 100%; border-collapse: collapse; }
-            th, td { padding: 3px 2px; font-size: 11px; }
-            .center { text-align: center; }
-            .right { text-align: right; }
-            .bold { font-weight: bold; }
-            .dashed { border-top: 1px dashed #000; margin: 4px 0; }
-            .solid { border-top: 2px solid #000; margin: 4px 0; }
-          </style>
-        </head>
-        <body>
-          ${receiptContent}
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(function() { window.close(); }, 500);
-            }
-          </script>
-        </body>
-      </html>
-    `)
-    printWindow.document.close()
   }
 
-  const handleNewSale = () => {
-    onNewSale?.()
-    onClose()
+  const handleNewSaleClick = () => {
+    try {
+      console.log('🆕 New Sale clicked')
+      
+      // Call the onNewSale callback
+      if (typeof onNewSale === 'function') {
+        onNewSale()
+      } else {
+        console.error('onNewSale is not a function!')
+      }
+    } catch (error) {
+      console.error('New Sale error:', error)
+    }
   }
 
-  // Guard — never render if saleData is missing
-  if (!isOpen || !saleData) return null
+  const handleCloseClick = () => {
+    try {
+      console.log('❌ Close clicked')
+      
+      // Call the onClose callback
+      if (typeof onClose === 'function') {
+        onClose()
+      } else {
+        console.error('onClose is not a function!')
+      }
+    } catch (error) {
+      console.error('Close error:', error)
+    }
+  }
 
-  // Safe values with fallbacks
-  const cashAmount   = Number(saleData.cash_amount   ?? 0)
-  const cardAmount   = Number(saleData.card_amount   ?? 0)
-  const creditAmount = Number(saleData.credit_amount ?? 0)
-  const changeAmount = Number(saleData.change_amount ?? 0)
-  const subtotal     = Number(saleData.subtotal      ?? 0)
-  const taxAmount    = Number(saleData.tax_amount    ?? 0)
-  const discount     = Number(saleData.discount_amount ?? 0)
-  const total        = Number(saleData.total         ?? 0)
-  const storeName    = storeInfo?.store_name || storeInfo?.name || 'STORE NAME'
+  const fmt = (amount: number) => {
+    const num = Number(amount) || 0
+    return `KES ${num.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  }
+
+  // Don't render if not open or no data
+  if (!isOpen || !saleData) {
+    return null
+  }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full">
-
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
+    >
+      <div 
+        className="bg-white rounded-xl w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b bg-green-50 rounded-t-xl">
-          <div>
-            <h2 className="text-lg font-bold text-green-700">✅ Sale Completed!</h2>
-            <p className="text-xs text-green-600 mt-0.5">#{saleData.sale_number}</p>
+        <div className="flex items-center justify-between p-4 border-b bg-green-50 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-green-900">Sale Completed!</h2>
+              <p className="text-sm text-green-700">#{saleData.sale_number}</p>
+            </div>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
-            <X className="w-5 h-5" />
+          <button
+            onClick={handleCloseClick}
+            className="p-2 hover:bg-gray-100 rounded-lg transition"
+            type="button"
+            aria-label="Close"
+          >
+            <X className="w-6 h-6 text-gray-600" />
           </button>
         </div>
 
-        {/* Receipt Preview */}
-        <div className="p-4 bg-gray-50 max-h-[55vh] overflow-y-auto">
-          <div
-            ref={componentRef}
-            style={{ fontFamily: 'Courier New, monospace', fontSize: '12px', width: '100%' }}
+        {/* Receipt Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto p-4">
+          <div 
+            ref={receiptRef}
+            className="bg-white font-mono text-sm"
+            style={{ width: '80mm', margin: '0 auto' }}
           >
             {/* Store Header */}
-            <div style={{ textAlign: 'center', borderBottom: '2px solid black', paddingBottom: '8px', marginBottom: '8px' }}>
-              <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{storeName}</div>
-              {storeInfo?.address && <div style={{ fontSize: '11px' }}>{storeInfo.address}</div>}
-              {storeInfo?.phone   && <div style={{ fontSize: '11px' }}>Tel: {storeInfo.phone}</div>}
+            <div className="text-center mb-4">
+              <div className="text-lg font-bold">{storeInfo?.store_name || 'OTC'}</div>
+              <div className="text-xs mt-1">{storeInfo?.address || 'occ lane'}</div>
+              <div className="text-xs">Tel: {storeInfo?.phone || '0798111111'}</div>
             </div>
 
-            {/* Sale Info */}
-            <div style={{ fontSize: '11px', marginBottom: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <div className="border-t border-dashed border-gray-400 my-2" />
+
+            {/* Receipt Details */}
+            <div className="text-xs space-y-1">
+              <div className="flex justify-between">
                 <span>Receipt #:</span>
-                <strong>{saleData.sale_number}</strong>
+                <span className="font-bold">{saleData.sale_number}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div className="flex justify-between">
                 <span>Date:</span>
-                <span>{new Date(saleData.created_at).toLocaleString()}</span>
+                <span>{new Date(saleData.created_at).toLocaleString('en-GB', { 
+                  day: '2-digit', 
+                  month: '2-digit', 
+                  year: 'numeric', 
+                  hour: '2-digit', 
+                  minute: '2-digit' 
+                })}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div className="flex justify-between">
                 <span>Cashier:</span>
-                <span>{saleData.cashier_name}</span>
+                <span>{saleData.cashier_name || 'Cashier'}</span>
               </div>
               {saleData.customer_name && (
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <div className="flex justify-between">
                   <span>Customer:</span>
                   <span>{saleData.customer_name}</span>
                 </div>
               )}
             </div>
 
-            {/* Dashed line */}
-            <div style={{ borderTop: '1px dashed black', margin: '6px 0' }}></div>
+            <div className="border-t border-dashed border-gray-400 my-2" />
 
             {/* Items Table */}
-            <table style={{ width: '100%', fontSize: '11px', marginBottom: '6px' }}>
+            <table className="w-full text-xs">
               <thead>
-                <tr style={{ borderBottom: '1px solid black' }}>
-                  <th style={{ textAlign: 'left', padding: '2px' }}>Item</th>
-                  <th style={{ textAlign: 'center', padding: '2px' }}>Qty</th>
-                  <th style={{ textAlign: 'right', padding: '2px' }}>Price</th>
-                  <th style={{ textAlign: 'right', padding: '2px' }}>Total</th>
+                <tr className="border-b border-gray-400">
+                  <th className="text-left py-1">Item</th>
+                  <th className="text-center py-1">Qty</th>
+                  <th className="text-right py-1">Price</th>
+                  <th className="text-right py-1">Total</th>
                 </tr>
               </thead>
               <tbody>
-                {(saleData.items || []).map((item, index) => (
-                  <tr key={index} style={{ borderBottom: '1px dotted #ccc' }}>
-                    <td style={{ padding: '2px' }}>{item.product_name}</td>
-                    <td style={{ textAlign: 'center', padding: '2px' }}>{item.quantity}</td>
-                    <td style={{ textAlign: 'right', padding: '2px' }}>{fmt(item.unit_price)}</td>
-                    <td style={{ textAlign: 'right', padding: '2px', fontWeight: 'bold' }}>{fmt(item.subtotal)}</td>
+                {saleData.items?.map((item: any, index: number) => (
+                  <tr key={index}>
+                    <td className="py-1">{item.product_name}</td>
+                    <td className="text-center">{item.quantity}</td>
+                    <td className="text-right">{fmt(item.unit_price)}</td>
+                    <td className="text-right font-bold">{fmt(item.subtotal)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
 
-            {/* Solid line */}
-            <div style={{ borderTop: '2px solid black', margin: '6px 0' }}></div>
+            <div className="border-t border-dashed border-gray-400 my-2" />
 
             {/* Totals */}
-            <div style={{ fontSize: '11px', marginBottom: '6px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Subtotal:</span><span>{fmt(subtotal)}</span>
+            <div className="text-xs space-y-1">
+              <div className="flex justify-between">
+                <span>Subtotal:</span>
+                <span>{fmt(saleData.subtotal)}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Tax (16%):</span><span>{fmt(taxAmount)}</span>
-              </div>
-              {discount > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'green' }}>
-                  <span>Discount:</span><span>-{fmt(discount)}</span>
+              {saleData.tax_amount > 0 && (
+                <div className="flex justify-between">
+                  <span>Tax (16%):</span>
+                  <span>{fmt(saleData.tax_amount)}</span>
                 </div>
               )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '14px', borderTop: '2px solid black', marginTop: '4px', paddingTop: '4px' }}>
-                <span>TOTAL:</span><span>{fmt(total)}</span>
-              </div>
-            </div>
-
-            {/* Dashed line */}
-            <div style={{ borderTop: '1px dashed black', margin: '6px 0' }}></div>
-
-            {/* Payment Details */}
-            <div style={{ fontSize: '11px', marginBottom: '6px' }}>
-              <div style={{ fontWeight: 'bold', marginBottom: '3px' }}>PAYMENT METHOD:</div>
-              {cashAmount > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Cash:</span><span>{fmt(cashAmount)}</span>
-                </div>
-              )}
-              {cardAmount > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Card/Bank:</span><span>{fmt(cardAmount)}</span>
-                </div>
-              )}
-              {creditAmount > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Credit:</span><span>{fmt(creditAmount)}</span>
-                </div>
-              )}
-              {changeAmount > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', borderTop: '1px solid #ccc', marginTop: '4px', paddingTop: '4px' }}>
-                  <span>CHANGE:</span><span>{fmt(changeAmount)}</span>
+              {saleData.discount_amount > 0 && (
+                <div className="flex justify-between">
+                  <span>Discount:</span>
+                  <span>-{fmt(saleData.discount_amount)}</span>
                 </div>
               )}
             </div>
 
-            {/* Solid line */}
-            <div style={{ borderTop: '2px solid black', margin: '8px 0' }}></div>
+            <div className="border-t-2 border-gray-800 my-2" />
+
+            <div className="text-base font-bold flex justify-between mb-2">
+              <span>TOTAL:</span>
+              <span>{fmt(saleData.total)}</span>
+            </div>
+
+            <div className="border-t border-dashed border-gray-400 my-2" />
+
+            {/* Payment Method */}
+            <div className="text-xs">
+              <div className="font-bold mb-1">PAYMENT METHOD:</div>
+              {saleData.cash_amount > 0 && (
+                <div className="flex justify-between">
+                  <span>Cash:</span>
+                  <span>{fmt(saleData.cash_amount)}</span>
+                </div>
+              )}
+              {saleData.card_amount > 0 && (
+                <div className="flex justify-between">
+                  <span>Card/Bank:</span>
+                  <span>{fmt(saleData.card_amount)}</span>
+                </div>
+              )}
+              {saleData.credit_amount > 0 && (
+                <div className="flex justify-between">
+                  <span>Credit:</span>
+                  <span>{fmt(saleData.credit_amount)}</span>
+                </div>
+              )}
+              {saleData.change_amount > 0 && (
+                <div className="flex justify-between font-bold mt-1">
+                  <span>Change:</span>
+                  <span>{fmt(saleData.change_amount)}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-dashed border-gray-400 my-3" />
 
             {/* Footer */}
-            <div style={{ textAlign: 'center', fontSize: '11px' }}>
-              <div style={{ fontWeight: 'bold' }}>THANK YOU FOR YOUR BUSINESS!</div>
+            <div className="text-center text-xs space-y-1">
+              <div className="font-bold">Thank you for your business!</div>
+              <div>Please come again</div>
               {storeInfo?.receipt_footer && (
-                <div style={{ marginTop: '4px' }}>{storeInfo.receipt_footer}</div>
+                <div className="mt-2">{storeInfo.receipt_footer}</div>
               )}
-              <div style={{ marginTop: '4px', color: '#666' }}>Goods once sold are not refundable</div>
-              <div style={{ marginTop: '8px', background: 'black', color: 'white', padding: '4px 8px', display: 'inline-block', fontFamily: 'monospace' }}>
-                {saleData.sale_number}
-              </div>
+            </div>
+
+            {/* Sale number as barcode text */}
+            <div className="text-center mt-3 text-xs">
+              <div className="font-mono tracking-wider">{saleData.sale_number}</div>
             </div>
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="p-4 border-t space-y-2">
-          {/* Primary: New Sale */}
+        {/* Action Buttons - Fixed at bottom */}
+        <div className="p-4 border-t bg-gray-50 space-y-3 flex-shrink-0">
+          {/* New Sale Button - Large and prominent */}
           <button
-            onClick={handleNewSale}
-            className="w-full py-4 bg-green-600 text-white rounded-lg font-bold text-xl hover:bg-green-700 transition shadow-lg"
+            onClick={handleNewSaleClick}
+            type="button"
+            className="w-full py-4 bg-green-600 text-white rounded-lg hover:bg-green-700 active:bg-green-800 transition-colors font-bold text-lg flex items-center justify-center gap-2 shadow-lg"
           >
-            ✓ New Sale
+            <ShoppingCart className="w-6 h-6" />
+            New Sale
           </button>
 
-          {/* Secondary */}
-          <div className="grid grid-cols-2 gap-2">
+          {/* Bottom Row - Print and Close */}
+          <div className="grid grid-cols-2 gap-3">
             <button
               onClick={handlePrint}
-              className="flex items-center justify-center gap-2 py-2.5 border-2 border-blue-500 text-blue-600 rounded-lg font-semibold hover:bg-blue-50 transition"
+              type="button"
+              className="py-3 border-2 border-blue-600 text-blue-600 bg-white rounded-lg hover:bg-blue-50 active:bg-blue-100 transition-colors font-semibold flex items-center justify-center gap-2 shadow"
             >
-              <Printer className="w-4 h-4" />
+              <Printer className="w-5 h-5" />
               Print Again
             </button>
+            
             <button
-              onClick={onClose}
-              className="py-2.5 border-2 border-gray-300 text-gray-600 rounded-lg font-medium hover:bg-gray-50 transition"
+              onClick={handleCloseClick}
+              type="button"
+              className="py-3 border-2 border-gray-300 text-gray-700 bg-white rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors font-semibold shadow"
             >
               Close
             </button>
           </div>
         </div>
-
       </div>
     </div>
   )
