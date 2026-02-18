@@ -19,88 +19,131 @@ export default function ReceiptModal({
   autoPrint = false
 }: ReceiptModalProps) {
   const receiptRef = useRef<HTMLDivElement>(null)
+  const hasAutoPrinted = useRef(false)
 
-  // Auto-print when modal opens
+  // Auto-print ONCE when modal opens
   useEffect(() => {
-    if (isOpen && autoPrint && receiptRef.current) {
-      // Delay print to ensure DOM is ready
+    if (isOpen && autoPrint && !hasAutoPrinted.current) {
+      hasAutoPrinted.current = true
       const timer = setTimeout(() => {
         handlePrint()
       }, 500)
       return () => clearTimeout(timer)
     }
-  }, [isOpen, autoPrint])
+    
+    // Reset when modal closes
+    if (!isOpen) {
+      hasAutoPrinted.current = false
+    }
+  }, [isOpen])
 
   const handlePrint = () => {
-    console.log('🖨️ Print button clicked')
-    if (receiptRef.current) {
-      const printWindow = window.open('', '_blank')
-      if (printWindow) {
-        printWindow.document.write(`
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <title>Receipt - ${saleData?.sale_number || 'SALE'}</title>
-              <style>
-                @media print {
-                  @page { 
-                    margin: 0;
-                    size: 80mm auto;
-                  }
-                  body { 
-                    margin: 0;
-                    padding: 0;
-                  }
-                }
-                body {
-                  font-family: 'Courier New', monospace;
-                  width: 80mm;
-                  margin: 0 auto;
-                  padding: 5mm;
-                  font-size: 12px;
-                }
-                .center { text-align: center; }
-                .bold { font-weight: bold; }
-                .large { font-size: 16px; }
-                .divider { 
-                  border-top: 1px dashed #000; 
-                  margin: 8px 0; 
-                }
-                table { 
-                  width: 100%; 
-                  border-collapse: collapse; 
-                }
-                td { 
-                  padding: 2px 0; 
-                }
-                .right { text-align: right; }
-              </style>
-            </head>
-            <body>
-              ${receiptRef.current.innerHTML}
-            </body>
-          </html>
-        `)
-        printWindow.document.close()
-        printWindow.focus()
-        printWindow.print()
-        printWindow.close()
+    try {
+      console.log('🖨️ Printing receipt...')
+      if (!receiptRef.current) {
+        console.error('Receipt ref not found')
+        return
       }
+
+      const printWindow = window.open('', '_blank', 'width=300,height=600')
+      if (!printWindow) {
+        console.error('Could not open print window')
+        alert('Please allow popups to print receipts')
+        return
+      }
+
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Receipt - ${saleData?.sale_number || 'SALE'}</title>
+            <style>
+              @media print {
+                @page { 
+                  margin: 0;
+                  size: 80mm auto;
+                }
+                body { 
+                  margin: 0;
+                  padding: 0;
+                }
+              }
+              body {
+                font-family: 'Courier New', monospace;
+                width: 80mm;
+                margin: 0 auto;
+                padding: 5mm;
+                font-size: 12px;
+              }
+              .center { text-align: center; }
+              .bold { font-weight: bold; }
+              .large { font-size: 16px; }
+              .divider { 
+                border-top: 1px dashed #000; 
+                margin: 8px 0; 
+              }
+              table { 
+                width: 100%; 
+                border-collapse: collapse; 
+              }
+              td { 
+                padding: 2px 0; 
+              }
+              .right { text-align: right; }
+            </style>
+          </head>
+          <body>
+            ${receiptRef.current.innerHTML}
+          </body>
+        </html>
+      `)
+      
+      printWindow.document.close()
+      
+      // Wait for content to load before printing
+      printWindow.onload = () => {
+        printWindow.focus()
+        setTimeout(() => {
+          printWindow.print()
+          printWindow.close()
+        }, 250)
+      }
+      
+      console.log('✅ Print window opened')
+    } catch (error) {
+      console.error('Print error:', error)
+      alert('Failed to print receipt. Please try again.')
     }
   }
 
-  const handleNewSale = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    console.log('🆕 New Sale button clicked')
-    onNewSale() // This should clear cart and close modal
+  const handleNewSaleClick = () => {
+    try {
+      console.log('🆕 New Sale clicked')
+      
+      // Call the onNewSale callback
+      if (typeof onNewSale === 'function') {
+        onNewSale()
+      } else {
+        console.error('onNewSale is not a function!')
+      }
+    } catch (error) {
+      console.error('New Sale error:', error)
+    }
   }
 
-  const handleCloseClick = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    console.log('❌ Close button clicked')
-    onClose()
+  const handleCloseClick = () => {
+    try {
+      console.log('❌ Close clicked')
+      
+      // Call the onClose callback
+      if (typeof onClose === 'function') {
+        onClose()
+      } else {
+        console.error('onClose is not a function!')
+      }
+    } catch (error) {
+      console.error('Close error:', error)
+    }
   }
 
   const fmt = (amount: number) => {
@@ -108,21 +151,22 @@ export default function ReceiptModal({
     return `KES ${num.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   }
 
-  if (!isOpen || !saleData) return null
+  // Don't render if not open or no data
+  if (!isOpen || !saleData) {
+    return null
+  }
 
   return (
     <div 
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-      onClick={(e) => {
-        // Only close if clicking the backdrop
-        if (e.target === e.currentTarget) {
-          handleCloseClick(e)
-        }
-      }}
+      style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
     >
-      <div className="bg-white rounded-xl w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl">
+      <div 
+        className="bg-white rounded-xl w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b bg-green-50">
+        <div className="flex items-center justify-between p-4 border-b bg-green-50 flex-shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
               <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -138,6 +182,7 @@ export default function ReceiptModal({
             onClick={handleCloseClick}
             className="p-2 hover:bg-gray-100 rounded-lg transition"
             type="button"
+            aria-label="Close"
           >
             <X className="w-6 h-6 text-gray-600" />
           </button>
@@ -153,7 +198,7 @@ export default function ReceiptModal({
             {/* Store Header */}
             <div className="text-center mb-4">
               <div className="text-lg font-bold">{storeInfo?.store_name || 'OTC'}</div>
-              <div className="text-xs mt-1">occ lane</div>
+              <div className="text-xs mt-1">{storeInfo?.address || 'occ lane'}</div>
               <div className="text-xs">Tel: {storeInfo?.phone || '0798111111'}</div>
             </div>
 
@@ -167,7 +212,13 @@ export default function ReceiptModal({
               </div>
               <div className="flex justify-between">
                 <span>Date:</span>
-                <span>{new Date(saleData.created_at).toLocaleString('en-GB')}</span>
+                <span>{new Date(saleData.created_at).toLocaleString('en-GB', { 
+                  day: '2-digit', 
+                  month: '2-digit', 
+                  year: 'numeric', 
+                  hour: '2-digit', 
+                  minute: '2-digit' 
+                })}</span>
               </div>
               <div className="flex justify-between">
                 <span>Cashier:</span>
@@ -276,31 +327,31 @@ export default function ReceiptModal({
               )}
             </div>
 
-            {/* Barcode placeholder */}
+            {/* Sale number as barcode text */}
             <div className="text-center mt-3 text-xs">
               <div className="font-mono tracking-wider">{saleData.sale_number}</div>
             </div>
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="p-4 border-t bg-gray-50 space-y-2">
-          {/* New Sale Button */}
+        {/* Action Buttons - Fixed at bottom */}
+        <div className="p-4 border-t bg-gray-50 space-y-3 flex-shrink-0">
+          {/* New Sale Button - Large and prominent */}
           <button
-            onClick={handleNewSale}
+            onClick={handleNewSaleClick}
             type="button"
-            className="w-full py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
+            className="w-full py-4 bg-green-600 text-white rounded-lg hover:bg-green-700 active:bg-green-800 transition-colors font-bold text-lg flex items-center justify-center gap-2 shadow-lg"
           >
-            <ShoppingCart className="w-5 h-5" />
+            <ShoppingCart className="w-6 h-6" />
             New Sale
           </button>
 
           {/* Bottom Row - Print and Close */}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-3">
             <button
               onClick={handlePrint}
               type="button"
-              className="py-3 border-2 border-blue-600 text-blue-600 bg-white rounded-lg hover:bg-blue-50 transition font-semibold flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
+              className="py-3 border-2 border-blue-600 text-blue-600 bg-white rounded-lg hover:bg-blue-50 active:bg-blue-100 transition-colors font-semibold flex items-center justify-center gap-2 shadow"
             >
               <Printer className="w-5 h-5" />
               Print Again
@@ -309,7 +360,7 @@ export default function ReceiptModal({
             <button
               onClick={handleCloseClick}
               type="button"
-              className="py-3 border-2 border-gray-300 text-gray-700 bg-white rounded-lg hover:bg-gray-50 transition font-semibold active:scale-95 cursor-pointer"
+              className="py-3 border-2 border-gray-300 text-gray-700 bg-white rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors font-semibold shadow"
             >
               Close
             </button>
@@ -319,4 +370,3 @@ export default function ReceiptModal({
     </div>
   )
 }
-
