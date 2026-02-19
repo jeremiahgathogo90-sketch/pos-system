@@ -9,7 +9,7 @@ import toast from 'react-hot-toast'
 export default function CheckoutPanel() {
   const queryClient = useQueryClient()
   const { user } = useAuthContext()
-  const [taxRate] = useState(16) // Default 16% VAT
+  const [taxRate] = useState(0)
   const [showCalculator, setShowCalculator] = useState(false)
   const [calculatorDisplay, setCalculatorDisplay] = useState('0')
   
@@ -312,4 +312,5 @@ export default function CheckoutPanel() {
       </div>
     </div>
   )
+
 }
