@@ -12,7 +12,7 @@ export default function SettingsPage() {
     address: '',
     phone: '',
     email: '',
-    tax_rate: '16',
+    tax_rate: '0',
     currency: 'KES',
     low_stock_threshold: '10',
     receipt_footer: '',
@@ -37,7 +37,7 @@ export default function SettingsPage() {
         address: settings.address || '',
         phone: settings.phone || '',
         email: settings.email || '',
-        tax_rate: settings.tax_rate?.toString() || '16',
+        tax_rate: settings.tax_rate?.toString() || '0',
         currency: settings.currency || 'KES',
         low_stock_threshold: settings.low_stock_threshold?.toString() || '10',
         receipt_footer: settings.receipt_footer || '',
@@ -222,4 +222,5 @@ export default function SettingsPage() {
       </form>
     </div>
   )
+
 }
